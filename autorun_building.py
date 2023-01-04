@@ -10,6 +10,7 @@ from time import time
 import pyautogui as pg
 
 from autorun_routes_service import RoutesService, RouteType
+from complete_routes import routes, city_routes
 from window_capture import WindowCapture
 from vision import Vision
 from filters.hsvfilter import HsvFilter
@@ -21,7 +22,7 @@ class AutoRun:
 
     current_position = None
     current_mouse_pt = None
-    routes: list[RouteType] = []
+    route: RouteType = None
     points = []
     current_point = None
     completed_points = []
@@ -30,7 +31,7 @@ class AutoRun:
     pause = True
     is_moving = False
 
-    is_building_route = False
+    is_edit_mode = False
 
     current_map_scale = 1
     current_length = None
@@ -148,13 +149,15 @@ class AutoRun:
                 rectangles = self.find_opened_map()
                 if len(rectangles) > 0:
                     find_counter += 1
-                    if find_counter > 3:
+                    if find_counter > 5:
                         print(' +')
                         break
                 else:
-                    find_counter = 0
-                    pg.hotkey('shift', 'r')
-                    pg.sleep(0.25)
+                    find_counter -= 1
+                    if find_counter < -5:
+                        find_counter = 0
+                        pg.hotkey('shift', 'r')
+                        pg.sleep(0.35)
 
         if close_map:
             find_counter = 0
@@ -163,13 +166,15 @@ class AutoRun:
                 rectangles = self.find_opened_map()
                 if len(rectangles) == 0:
                     find_counter += 1
-                    if find_counter > 3:
+                    if find_counter > 5:
                         print(' +')
                         break
                 else:
-                    find_counter = 0
-                    pg.hotkey('shift', 'r')
-                    pg.sleep(0.5)
+                    find_counter -= 1
+                    if find_counter < -5:
+                        find_counter = 0
+                        pg.hotkey('shift', 'r')
+                        pg.sleep(0.35)
 
     def mount_up_down_handler(self, mount_up=False, mount_down=False):
         find_counter = 0
@@ -219,9 +224,9 @@ class AutoRun:
                 self.points_region = {"top": t + y + 50, "left": l + x - 500, "width": 1000, "height": 700}
 
                 # reassign center with relative points
-                # t, l, w, h = self.window.getRegion().values()
-                # hp_bar_region = {'top': t + 320, 'left': l + 860, 'width': 210, 'height': 280}
-                # self.player_center = self.get_relative_point(self.points_region, hp_bar_region, child_point=self.player_center)
+                t, l, w, h = self.window.getRegion().values()
+                hp_bar_region = {'top': t + 320, 'left': l + 860, 'width': 210, 'height': 280}
+                self.player_center = self.get_relative_point(self.points_region, hp_bar_region, child_point=self.player_center)
 
     def find_player_center(self, region=None):
         hp_bar_temp = cv.imread(
@@ -297,18 +302,6 @@ class AutoRun:
         region = None
         if self.position_region is not None:
             region = self.position_region
-
-        elif self.current_point and self.points_region is not None:
-            t, l, w, h = self.points_region.values()
-            x, y = self.current_point
-            region = {
-                "top": t + y - radius,
-                "left": l + x - radius,
-                "width": radius * 2,
-                "height": radius * 2,
-            }
-
-            self.position_region = region
 
         elif self.points_region is not None:
             region = self.points_region
@@ -407,16 +400,27 @@ class AutoRun:
 
     def add_mouse_pos_to_points(self):
         x, y = pg.position()
-        pt = self.get_relative_point(self.screen_region, self.points_region, parent_point=(x, y))
-        self.points.append(pt)
+        rel_x, rel_y = self.get_relative_point(self.screen_region, self.points_region, parent_point=(x, y))
+
+        if self.is_edit_mode:
+            if self.current_point is not None:
+                self.points[self.current_point] = [rel_x, rel_y]
+            return
+
+        self.points.append([rel_x, rel_y])
 
     def add_current_pos_to_points(self):
+        if self.is_edit_mode:
+            if self.current_point is not None and self.current_position is not None:
+                self.points[self.current_point] = [*self.current_position]
+            return
+
         self.map_open_close_handler(open_map=True)
 
         self.reset_current_position_region(is_last_point=True)
 
         if self.current_position is not None:
-            self.points.append(self.current_position)
+            self.points.append([*self.current_position])
 
     def save_points_to_route(self, points=None):
         if points is None:
@@ -440,9 +444,93 @@ class AutoRun:
                 'points': current_points
             })
 
+            print('Route saved')
+
+    def change_points_for_route(self, points=None):
+        if points is None:
+            points = []
+        current_points: list = len(self.points) > 0 and self.points or []
+        if len(current_points) > 0:
+
+            RoutesService().add_route({
+                'location': self.route['location'],
+                'from_': self.route['from_'],
+                'to': self.route['to'],
+                'scale': self.route['scale'],
+                'points': current_points
+            })
+
+            print('Route changed')
+
     def remove_last_point_in_building_mode(self):
         if len(self.points):
             self.points.pop()
+
+    def move_current_point_next(self):
+        if self.current_point is None and len(self.points) > 0:
+            self.current_point = 0
+        if self.current_point >= len(self.points) - 1:
+            self.current_point = 0
+            return
+        self.current_point += 1
+
+    def move_current_point_prev(self):
+        if self.current_point is None and len(self.points) > 0:
+            self.current_point = 0
+        if self.current_point <= 0:
+            self.current_point = len(self.points) - 1
+            return
+        self.current_point -= 1
+
+    def move_current_point_left(self):
+        if self.current_point is not None and self.points[self.current_point] is not None:
+            self.points[self.current_point][0] -= 1
+
+    def move_current_point_right(self):
+        if self.current_point is not None and self.points[self.current_point] is not None:
+            self.points[self.current_point][0] += 1
+
+    def move_current_point_top(self):
+        if self.current_point is not None and self.points[self.current_point] is not None:
+            self.points[self.current_point][1] -= 1
+
+    def move_current_point_bottom(self):
+        if self.current_point is not None and self.points[self.current_point] is not None:
+            self.points[self.current_point][1] += 1
+
+    def remove_current_point(self):
+        if self.current_point is not None and self.points[self.current_point] is not None:
+            self.points.pop(self.current_point)
+            if self.points[self.current_point] is None and self.points[self.current_point - 1] is not None:
+                self.current_point -= 1
+            elif len(self.points) < 1:
+                self.current_point = None
+
+    def insert_point_next(self):
+        if len(self.points) > 0:
+            if len(self.points) > 1 and self.points[self.current_point + 1] is not None:
+                x, y = self.points[self.current_point]
+                prev_x, prev_y = self.points[self.current_point + 1]
+                new_x = abs(int((x - prev_x) / 2 - x))
+                new_y = abs(int((y - prev_y) / 2 - y))
+                self.points.insert(self.current_point, [new_x, new_y])
+            if len(self.points) == 1:
+                self.points.insert(1, [self.points[0][0], self.points[0][1]])
+        else:
+            return
+
+    def insert_point_prev(self):
+        if len(self.points) > 0:
+            if len(self.points) > 1 and self.points[self.current_point - 1] is not None:
+                x, y = self.points[self.current_point]
+                prev_x, prev_y = self.points[self.current_point - 1]
+                new_x = abs(int((x - prev_x) / 2 - x))
+                new_y = abs(int((y - prev_y) / 2 - y))
+                self.points.insert(self.current_point, [new_x, new_y])
+            if len(self.points) == 1:
+                self.points.insert(0, [self.points[0][0], self.points[0][1]])
+        else:
+            return
 
     @staticmethod
     def reverse_route(route: RouteType):
@@ -573,8 +661,15 @@ class AutoRun:
     def draw_points(self):
         if self.output_frame is not None:
             for i, (x, y) in enumerate(self.points):
-                cv.circle(self.output_frame, (x, y), 2, (0, 0, 255), 2)
-                cv.putText(self.output_frame, str(i + 1), (x + 3, y - 3), cv.FONT_HERSHEY_PLAIN, 0.8, (0, 0, 0), 2)
+                if i != self.current_point:
+                    cv.circle(self.output_frame, (x, y), 2, (0, 0, 255), 2)
+                    cv.putText(self.output_frame, str(i + 1), (x + 3, y - 3), cv.FONT_HERSHEY_PLAIN, 0.8, (0, 0, 0), 2)
+
+            if self.current_point is not None:
+                x, y = self.points[self.current_point]
+                cv.circle(self.output_frame, (x, y), 2, (255, 0, 0), 2)
+                cv.putText(self.output_frame, str(self.current_point+1), (x + 3, y - 3), cv.FONT_HERSHEY_PLAIN, 1.2, (0, 255, 0), 2)
+
 
     def draw_fps(self):
         if self.output_frame is not None:
@@ -587,7 +682,19 @@ class AutoRun:
         if self.output_frame is not None:
             cv.imshow("Autorun output frame", self.output_frame)
 
-    def start(self):
+    def start(self, is_edit_mode=False, route: RouteType = None):
+        self.is_edit_mode = is_edit_mode
+
+        if self.is_edit_mode and route is not None:
+            self.route = route
+            location, from_, to, scale, points = route.values()
+
+            print(f' --- {location} : {from_} --> {to} ---')
+
+            self.points = points
+            self.current_point = 0
+            self.current_map_scale = scale
+
         pg.PAUSE = 0
         pg.DARWIN_CATCH_UP_TIME = 0.005
 
@@ -663,6 +770,20 @@ if __name__ == '__main__':
     lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('m')], autorun.reset_current_position_region, is_mouse=True)
 
     lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('s')], autorun.save_points_to_route)
+    lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('n')], autorun.change_points_for_route)
+
+    lsn.add_combination([lsn.Key.up], autorun.move_current_point_top)
+    lsn.add_combination([lsn.Key.down], autorun.move_current_point_bottom)
+    lsn.add_combination([lsn.Key.left], autorun.move_current_point_left)
+    lsn.add_combination([lsn.Key.right], autorun.move_current_point_right)
+
+    lsn.add_combination([lsn.KeyCode.from_char(',')], autorun.move_current_point_prev)
+    lsn.add_combination([lsn.KeyCode.from_char('.')], autorun.move_current_point_next)
+
+    lsn.add_combination([lsn.KeyCode.from_char('-')], autorun.remove_current_point)
+    lsn.add_combination([lsn.KeyCode.from_char('9')], autorun.insert_point_prev)
+    lsn.add_combination([lsn.KeyCode.from_char('0')], autorun.insert_point_next)
+
 
     print('Creating thread...', end='')
     listenerT = thr.Thread(target=lsn.listen)
@@ -674,7 +795,8 @@ if __name__ == '__main__':
 
     # autorun.points = []
 
-    autorun.start()
+    autorun.start(is_edit_mode=True, route=city_routes.bank_of_bridgewatch__bridgewatch__bank_chest)
+    # autorun.start()
 
     print('Points: ', autorun.points)
 

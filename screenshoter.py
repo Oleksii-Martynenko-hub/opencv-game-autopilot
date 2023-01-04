@@ -61,7 +61,7 @@ class Screenshoter:
                 inquirer.Text('name', message="How to name screenshot?")
             ]
             question_change_path = [
-                inquirer.List('is_change_path', message="Would you like to change the path?", choices=['No', 'Yes']),
+                inquirer.List('is_change_path', message=f"Would you like to change the default path: '{self.default_path}' ?", choices=['No', 'Yes']),
             ]
 
             screenshot = inquirer.prompt(question_name)
