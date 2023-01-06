@@ -5,9 +5,10 @@ from time import time
 from collections.abc import Callable
 from collections import namedtuple
 
+from json_data_service import JSONService
+
 
 class WindowCapture:
-
     # properties
     last_time = time()
     time_list = []
@@ -19,7 +20,22 @@ class WindowCapture:
     l = 0
     t = 0
 
-    def __init__(self, window_name='Albion Online Client'):
+    def __init__(self):
+        json = JSONService()
+        data: dict = None
+        try:
+            data = json.read_data('window/window_region')
+        except:
+            print("Window region not found")
+            self.init_region()
+            data = json.read_data('window/window_region')
+        finally:
+            print("Window region: ", data)
+        self.t, self.l, self.w, self.h = data.values()
+
+        self.sct = mss()
+
+    def init_region(self, window_name='Albion Online Client'):
         windows = pwc.getWindowsWithTitle(window_name)
         if windows:
             self.win = windows[0]
@@ -30,19 +46,21 @@ class WindowCapture:
         self.w, self.h = self.win.size.width, self.win.size.height - titlebar_height
         self.l, self.t = self.win.topleft.x, self.win.topleft.y + titlebar_height
 
-        self.sct = mss()
+        json = JSONService()
+        json.create_data('window/window_region', {"top": self.t, "left": self.l, "width": self.w, "height": self.h})
 
     def getRegion(self):
 
         return {"top": self.t, "left": self.l, "width": self.w, "height": self.h}
 
     def startWatchdogOnActive(self):
-        def activeCB(active):
-            self.isWindowActive = active
+        if self.win is not None:
+            def activeCB(active):
+                self.isWindowActive = active
 
-        self.win.watchdog.start(isActiveCB=activeCB)
+            self.win.watchdog.start(isActiveCB=activeCB)
 
-        return self.win.watchdog.stop
+            return self.win.watchdog.stop
 
     def getScreenshot(self, region=None):
         reg = region
