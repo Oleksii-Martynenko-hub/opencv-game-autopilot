@@ -45,7 +45,7 @@ class Screenshoter:
             left, top = self.left_top
             right, bottom = self.right_bottom
 
-            grab_region = {"top": top, "left": left, "width": right - left, "height": bottom - top}
+            grab_region = {"top": top + 1, "left": left + 1, "width": right - left - 1, "height": bottom - top - 1}
 
             images = []
 
@@ -215,7 +215,7 @@ class Screenshoter:
                 height = int(frame.shape[0] * self.scale_percent / 100)
                 dim = (width, height)
 
-                frame = cv.resize(frame, dim)
+                frame = cv.resize(frame, dim, interpolation=cv.INTER_AREA)
 
             cv.imshow("Screenshoter view", frame)
 
