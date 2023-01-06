@@ -156,7 +156,10 @@ class AutoRun:
                     find_counter -= 1
                     if find_counter < -5:
                         find_counter = 0
-                        pg.hotkey('shift', 'r')
+                        pg.keyDown('shiftleft')
+                        pg.keyDown('e')
+                        pg.keyUp('e')
+                        pg.keyUp('shiftleft')
                         pg.sleep(0.35)
 
         if close_map:
@@ -173,7 +176,10 @@ class AutoRun:
                     find_counter -= 1
                     if find_counter < -5:
                         find_counter = 0
-                        pg.hotkey('shift', 'r')
+                        pg.keyDown('shiftleft')
+                        pg.keyDown('e')
+                        pg.keyUp('e')
+                        pg.keyUp('shiftleft')
                         pg.sleep(0.35)
 
     def mount_up_down_handler(self, mount_up=False, mount_down=False):
@@ -670,7 +676,6 @@ class AutoRun:
                 cv.circle(self.output_frame, (x, y), 2, (255, 0, 0), 2)
                 cv.putText(self.output_frame, str(self.current_point+1), (x + 3, y - 3), cv.FONT_HERSHEY_PLAIN, 1.2, (0, 255, 0), 2)
 
-
     def draw_fps(self):
         if self.output_frame is not None:
             fps = self.window.getAverageFps()
@@ -754,7 +759,7 @@ if __name__ == '__main__':
     ]
 
     print("Finding window...", end='')
-    albion_window = WindowCapture('Albion Online Client')
+    albion_window = WindowCapture()
     print(' +')
     stop_watching = albion_window.startWatchdogOnActive()
 
@@ -795,10 +800,11 @@ if __name__ == '__main__':
 
     # autorun.points = []
 
-    autorun.start(is_edit_mode=True, route=city_routes.bank_of_bridgewatch__bridgewatch__bank_chest)
-    # autorun.start()
+    # autorun.start(is_edit_mode=True, route=city_routes.bridgewatch__lazygrass_plain__yara_sunblaze_heart_mission)
+    autorun.start()
 
     print('Points: ', autorun.points)
 
-    stop_watching()
+    if stop_watching is not None:
+        stop_watching()
     cv.destroyAllWindows()
