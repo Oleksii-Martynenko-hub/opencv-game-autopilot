@@ -800,8 +800,8 @@ if __name__ == '__main__':
 
     # autorun.points = []
 
-    # autorun.start(is_edit_mode=True, route=city_routes.bridgewatch__lazygrass_plain__yara_sunblaze_heart_mission)
-    autorun.start()
+    autorun.start(is_edit_mode=True, route=city_routes.bank_of_bridgewatch__bridgewatch__bank_chest)
+    # autorun.start()
 
     print('Points: ', autorun.points)
 

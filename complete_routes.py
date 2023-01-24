@@ -335,6 +335,8 @@ COMPLETE_ROUTES = namedtuple("COMPLETE_ROUTES", [
 
 complete_routes = COMPLETE_ROUTES(**{
     "bridgewatch__martlock": [
+        city_routes.bridgewatch__lazygrass_plain__smoothfloor_cleft,
+
         routes.smoothfloor_cleft__bridgewatch__redstone_plain,
         routes.redstone_plain__smoothfloor_cleft__felniks_hill,
         routes.felniks_hill__redstone_plain__carns_hill,
@@ -343,6 +345,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.blackthorn_quarry__adrens_hill__martlock,
     ],
     "bridgewatch__thetford": [
+        city_routes.bridgewatch__lazygrass_plain__smoothfloor_cleft,
+
         routes.smoothfloor_cleft__bridgewatch__redstone_plain,
         routes.redstone_plain__smoothfloor_cleft__felniks_hill,
         routes.felniks_hill__redstone_plain__carns_hill,
@@ -360,6 +364,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.dusklight_fen__falsestep_marsh__thetford,
     ],
     "bridgewatch__fort_sterling": [
+        city_routes.bridgewatch__smoothfloor_cleft__lazygrass_plain__r,
+
         routes.lazygrass_plain__bridgewatch__snapshaft_trough__r,
         routes.snapshaft_trough__lazygrass_plain__longshadow_plain__r,
         routes.longshadow_plain__snapshaft_trough__spindlewood__r,
@@ -377,6 +383,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.mawar_gorge__pen_kerrig__fort_sterling__r,
     ],
     "bridgewatch__lymhurst": [
+        city_routes.bridgewatch__smoothfloor_cleft__lazygrass_plain__r,
+
         routes.lazygrass_plain__bridgewatch__snapshaft_trough__r,
         routes.snapshaft_trough__lazygrass_plain__longshadow_plain__r,
         routes.longshadow_plain__snapshaft_trough__spindlewood__r,
@@ -386,6 +394,8 @@ complete_routes = COMPLETE_ROUTES(**{
     ],
 
     "martlock__thetford": [
+        city_routes.martlock__blackthorn_quarry__haytor,
+
         routes.haytor__martlock__curlew_fen,
         routes.curlew_fen__haytor__dewleaf_fen,
         routes.dewleaf_fen__curlew_fen__fog_fen,
@@ -394,6 +404,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.dusklight_fen__falsestep_marsh__thetford,
     ],
     "martlock__fort_sterling": [
+        city_routes.martlock__blackthorn_quarry__haytor,
+
         routes.haytor__martlock__curlew_fen,
         routes.curlew_fen__haytor__dewleaf_fen,
         routes.dewleaf_fen__curlew_fen__fog_fen,
@@ -411,6 +423,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.cairn_camain__cairn_fidair__fort_sterling,
     ],
     "martlock__lymhurst": [
+        city_routes.martlock__haytor__blackthorn_quarry__r,
+
         routes.blackthorn_quarry__martlock__adrens_hill__r,
         routes.adrens_hill__blackthorn_quarry__carns_hill__r,
         routes.carns_hill__adrens_hill__felniks_hill__r,
@@ -428,6 +442,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.ferndell__willow_wood__lymhurst__r,
     ],
     "martlock__bridgewatch": [
+        city_routes.martlock__haytor__blackthorn_quarry__r,
+
         routes.blackthorn_quarry__martlock__adrens_hill__r,
         routes.adrens_hill__blackthorn_quarry__carns_hill__r,
         routes.carns_hill__adrens_hill__felniks_hill__r,
@@ -437,6 +453,8 @@ complete_routes = COMPLETE_ROUTES(**{
     ],
 
     "thetford__fort_sterling": [
+        city_routes.thetford__dusklight_fen__willowsigh_marsh,
+
         routes.willowsigh_marsh__thetford__sleetwater_basin,
         routes.sleetwater_basin__willowsigh_marsh__cairn_glascore,
         routes.cairn_glascore__sleetwater_basin__cairn_gorm,
@@ -445,6 +463,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.cairn_camain__cairn_fidair__fort_sterling,
     ],
     "thetford__lymhurst": [
+        city_routes.thetford__dusklight_fen__willowsigh_marsh,
+
         routes.willowsigh_marsh__thetford__sleetwater_basin,
         routes.sleetwater_basin__willowsigh_marsh__cairn_glascore,
         routes.cairn_glascore__sleetwater_basin__cairn_gorm,
@@ -462,6 +482,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.birchcopse__flynsdell__lymhurst,
     ],
     "thetford__bridgewatch": [
+        city_routes.thetford__willowsigh_marsh__dusklight_fen__r,
+
         routes.dusklight_fen__thetford__falsestep_marsh__r,
         routes.falsestep_marsh__dusklight_fen__fog_fen__r,
         routes.fog_fen__falsestep_marsh__dewleaf_fen__r,
@@ -479,6 +501,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.smoothfloor_cleft__redstone_plain__bridgewatch__r,
     ],
     "thetford__martlock": [
+        city_routes.thetford__willowsigh_marsh__dusklight_fen__r,
+
         routes.dusklight_fen__thetford__falsestep_marsh__r,
         routes.falsestep_marsh__dusklight_fen__fog_fen__r,
         routes.fog_fen__falsestep_marsh__dewleaf_fen__r,
@@ -488,6 +512,8 @@ complete_routes = COMPLETE_ROUTES(**{
     ],
 
     "fort_sterling__lymhurst": [
+        city_routes.fort_sterling__cairn_camain__mawar_gorge,
+
         routes.mawar_gorge__fort_sterling__pen_kerrig,
         routes.pen_kerrig__mawar_gorge__rowanwood,
         routes.rowanwood__pen_kerrig__oakcopse,
@@ -496,6 +522,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.birchcopse__flynsdell__lymhurst,
     ],
     "fort_sterling__bridgewatch": [
+        city_routes.fort_sterling__cairn_camain__mawar_gorge,
+
         routes.mawar_gorge__fort_sterling__pen_kerrig,
         routes.pen_kerrig__mawar_gorge__rowanwood,
         routes.rowanwood__pen_kerrig__oakcopse,
@@ -513,6 +541,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.lazygrass_plain__snapshaft_trough__bridgewatch,
     ],
     "fort_sterling__martlock": [
+        city_routes.fort_sterling__mawar_gorge__cairn_camain__r,
+
         routes.cairn_camain__fort_sterling__cairn_fidair__r,
         routes.cairn_fidair__cairn_camain__cairn_gorm__r,
         routes.cairn_gorm__cairn_fidair__cairn_glascore__r,
@@ -530,6 +560,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.haytor__curlew_fen__martlock__r,
     ],
     "fort_sterling__thetford": [
+        city_routes.fort_sterling__mawar_gorge__cairn_camain__r,
+
         routes.cairn_camain__fort_sterling__cairn_fidair__r,
         routes.cairn_fidair__cairn_camain__cairn_gorm__r,
         routes.cairn_gorm__cairn_fidair__cairn_glascore__r,
@@ -539,6 +571,8 @@ complete_routes = COMPLETE_ROUTES(**{
     ],
 
     "lymhurst__bridgewatch": [
+        city_routes.lymhurst__birchcopse__ferndell,
+
         routes.ferndell__lymhurst__willow_wood,
         routes.willow_wood__ferndell__spindlewood,
         routes.spindlewood__willow_wood__longshadow_plain,
@@ -547,6 +581,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.lazygrass_plain__snapshaft_trough__bridgewatch,
     ],
     "lymhurst__martlock": [
+        city_routes.lymhurst__birchcopse__ferndell,
+
         routes.ferndell__lymhurst__willow_wood,
         routes.willow_wood__ferndell__spindlewood,
         routes.spindlewood__willow_wood__longshadow_plain,
@@ -564,6 +600,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.blackthorn_quarry__adrens_hill__martlock,
     ],
     "lymhurst__thetford": [
+        city_routes.lymhurst__ferndell__birchcopse__r,
+
         routes.birchcopse__lymhurst__flynsdell__r,
         routes.flynsdell__birchcopse__oakcopse__r,
         routes.oakcopse__flynsdell__rowanwood__r,
@@ -581,6 +619,8 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.willowsigh_marsh__sleetwater_basin__thetford__r,
     ],
     "lymhurst__fort_sterling": [
+        city_routes.lymhurst__ferndell__birchcopse__r,
+
         routes.birchcopse__lymhurst__flynsdell__r,
         routes.flynsdell__birchcopse__oakcopse__r,
         routes.oakcopse__flynsdell__rowanwood__r,
@@ -591,7 +631,6 @@ complete_routes = COMPLETE_ROUTES(**{
 
 
     "bridgewatch__hornbeam_wood__treeheart_mission": [
-        # city_routes.bank_of_bridgewatch__bank_chest__bridgewatch__r,
         routes.lazygrass_plain__bridgewatch__snapshaft_trough__r,
         routes.snapshaft_trough__lazygrass_plain__longshadow_plain__r,
         routes.longshadow_plain__snapshaft_trough__spindlewood__r,
@@ -608,6 +647,5 @@ complete_routes = COMPLETE_ROUTES(**{
         routes.longshadow_plain__spindlewood__snapshaft_trough,
         routes.snapshaft_trough__longshadow_plain__lazygrass_plain,
         routes.lazygrass_plain__snapshaft_trough__bridgewatch,
-        # city_routes.bridgewatch__lazygrass_plain__bank_of_bridgewatch,
     ],
 })

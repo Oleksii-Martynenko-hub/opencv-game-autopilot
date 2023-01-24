@@ -75,7 +75,7 @@ class DebugObjectDetection:
         self.threshold = threshold
 
         print("Finding window...")
-        self.window = WindowCapture('Albion Online Client')
+        self.window = WindowCapture()
 
     def set_cropped_region(self, crop_top: int = 0, crop_right: int = 0, crop_bottom: int = 0, crop_left: int = 0):
         top, left, width, height = self.window.getRegion().values()
@@ -84,7 +84,7 @@ class DebugObjectDetection:
                                "width": width - crop_left - crop_right, "height": height - crop_top - crop_bottom}
 
     def start(self, debug_mode: "origin" or "processed" or "threshold" = "origin",
-              draw_mode: "rectangles" or "points" or "both" = "points", is_show_template: bool = False):
+              draw_mode: "rectangles" or "points" or "both" = "points", is_show_template: bool = False, scale=100):
 
         print("Creating vision...")
         self.vision = Vision(self.template, hsv_filter=self.hsv_filter)
@@ -106,7 +106,7 @@ class DebugObjectDetection:
         cv.imshow("DebugObjectDetection template original", self.vision.template_original)
 
         print("Starting looping...")
-        scale_percent = 100  # percent of original size
+        # scale_percent = 100  # percent of original size
         while True:
             if is_show_template and self.vision.template_processed is not None:
                 cv.imshow("DebugObjectDetection template processed", self.vision.template_processed)
@@ -115,13 +115,13 @@ class DebugObjectDetection:
 
             processed = self.vision.apply_hsv_filter(origin, hsv_filter=self.hsv_filter)
 
-            # width = int(self.vision.template_original.shape[1] * scale_percent / 100)
-            # height = int(self.vision.template_original.shape[0] * scale_percent / 100)
-            # dim = (width, height)
+            width = int(origin.shape[1] * scale / 100)
+            height = int(origin.shape[0] * scale / 100)
+            dim = (width, height)
             #
             # original_img = self.vision.template_original
             # self.vision.template_original = cv.resize(original_img, dim)
-            rectangles = self.vision.find(processed, threshold=self.threshold, debug=True)
+            rectangles = self.vision.find(processed, threshold=self.threshold, debug=debug_mode == "threshold" or debug_mode == "processed")
             # self.vision.template_original = original_img
             #
             # if len(rectangles) == 0:
@@ -131,11 +131,13 @@ class DebugObjectDetection:
 
             self.window.getAverageFps()
 
-            if debug_mode == "origin":
+            if debug_mode == "origin" or debug_mode == "threshold":
                 output = self.draw(origin, rectangles, draw_mode)
+                output = cv.resize(output, dim, interpolation=cv.INTER_AREA)
                 cv.imshow("DebugObjectDetection haystack", output)
             else:
                 output = self.draw(processed, rectangles, draw_mode)
+                output = cv.resize(output, dim, interpolation=cv.INTER_AREA)
                 cv.imshow("DebugObjectDetection haystack", output)
 
             key = cv.waitKey(1)
@@ -187,35 +189,23 @@ class DebugObjectDetection:
 
 if __name__ == "__main__":
     temp = cv.imread(
-        'images/mount_up_status.jpeg', cv.IMREAD_UNCHANGED)
+        'images/bridgewatch_faction_sign.jpeg', cv.IMREAD_UNCHANGED)
 
     # cv.imshow('original template outside', temp)
 
     # TODO: check hsv filter origin/template, looks different
-    hsv_filter = HsvFilter.mount_up_status()
-    # vision = Vision(temp, hsv_filter=hsv_filter)
-    # processed = vision.apply_hsv_filter(temp, hsv_filter=hsv_filter)
-    # cv.imshow('processed template outside', processed)
+    hsv_filter = HsvFilter.player_hp_bar()
 
-    # while True:
-    #     cv.imshow("template", temp)
-    #     cv.imshow("processed template", processed)
-    #     cv.imshow("vision.template_original", vision.template_original)
-    #
-    #     key = cv.waitKey(1)
-    #     if key == 27:
-    #         break
-    #
-    # cv.destroyAllWindows()
     # rgb = cv.cvtColor(temp, cv.COLOR_BGR2RGB)
     # bgr = cv.cvtColor(rgb, cv.COLOR_RGB2BGR)
 
-    dod = DebugObjectDetection(temp, hsv_filter=hsv_filter)
-    t, l, w, h = 90, 90, 240, 100
+    dod = DebugObjectDetection(temp, threshold=0.95,  hsv_filter=HsvFilter(hMin=0, sMin=0, vMin=0, hMax=179, sMax=255, vMax=255, sAdd=0, sSub=0, vAdd=0, vSub=0))
+    # t, l, w, h = 90, 90, 240, 130
+    t, l, w, h = 850, 370, 115, 110
     or_w = dod.window.getRegion()['width']
     or_h = dod.window.getRegion()['height']
     dod.set_cropped_region(crop_top=t, crop_left=l, crop_right=or_w-l-w, crop_bottom=or_h-t-h)
 
-    dod.start("threshold", "rectangles", is_show_template=True)
+    dod.start("origin", "points", is_show_template=True, scale=350)
 
     # take_screenshot('lymhurst_market', [86, 1262, 279, 35])

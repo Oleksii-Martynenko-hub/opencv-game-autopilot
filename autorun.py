@@ -1,3 +1,4 @@
+import math
 import sys
 
 import cv2 as cv
@@ -11,6 +12,7 @@ import pyautogui as pg
 
 from autorun_routes_service import RoutesService, RouteType
 from complete_routes import complete_routes, routes, city_routes
+from tele_bot import TelegramBot
 from window_capture import WindowCapture
 from vision import Vision
 from filters.hsvfilter import HsvFilter
@@ -38,11 +40,12 @@ class AutoRun:
     current_map_scale = 1
     current_length = None
     last_position = None
-    last_position_for_speed_calc = None
     last_time = None
     speed_list = []
+    average_speed = None
     current_position_list = []
     current_time_list = []
+    route_times = []
 
     player_center = None
 
@@ -61,11 +64,15 @@ class AutoRun:
 
     output_frame = None
 
-    def __init__(self, window: WindowCapture = None, routes: list[RouteType] = []):
-        self.routes = routes
+    stack_level = 0
+
+    def __init__(self, window: WindowCapture = None, tb: TelegramBot = None):
+        self.closest_point = None
+        self.is_resetting = False
+        self.current_route = None
         self.routes_service = RoutesService()
-        if window is not None:
-            self.window = window
+        self.window = window
+        self.tb = tb
 
         # init visions
         print("Init visions...", end='')
@@ -80,7 +87,7 @@ class AutoRun:
         self.arrow_vision = Vision(arrow_temp, hsv_filter=minimap_arrow_hsv_filter)
         print(' +')
 
-    def find_location(self, location: str):
+    def get_location_vision(self, location: str):
         location_template = cv.imread(
             f'images/location_titles/{location}.jpeg', cv.IMREAD_UNCHANGED)
         if location_template is None:
@@ -90,16 +97,23 @@ class AutoRun:
         if location_template is not None:
             location_hsv_filter = HsvFilter.location_minimap_title()
             location_vision = Vision(location_template, hsv_filter=location_hsv_filter)
+            return location_vision
 
-            t, l, w, h = self.window.getRegion().values()
+    def find_location(self, location_vision: Vision):
+        location_hsv_filter = HsvFilter.location_minimap_title()
+        t, l, w, h = self.window.getRegion().values()
+        region = {"top": t + 15, "left": l + 300, "width": 380, "height": 90}
 
-            region = {"top": t + 15, "left": l + 300, "width": 380, "height": 90}
+        frame = self.window.getScreenshot(region)
+        processed = location_vision.apply_hsv_filter(frame, hsv_filter=location_hsv_filter)
+        return location_vision.find(processed, threshold=0.8)
 
+    def search_location_until_found(self, location: str):
+        location_vision = self.get_location_vision(location)
+        if location_vision is not None:
             find_counter = 0
             while True:
-                frame = self.window.getScreenshot(region)
-                processed = location_vision.apply_hsv_filter(frame, hsv_filter=location_hsv_filter)
-                rectangles = location_vision.find(processed, threshold=0.8)
+                rectangles = self.find_location(location_vision)
 
                 if len(rectangles) > 0:
                     find_counter += 1
@@ -116,18 +130,34 @@ class AutoRun:
         return self.north_vision.find(processed, threshold=0.75)
 
     def find_mount_up_status(self):
-        mount_up_status_template = cv.imread(
-            'images/mount_up_status.jpeg', cv.IMREAD_UNCHANGED)
+        mount_up_status_black_template = cv.imread(
+                    'images/mount_up_status_black.jpeg', cv.IMREAD_UNCHANGED)
 
-        if mount_up_status_template is not None:
-            mount_up_status_hsv_filter = HsvFilter.mount_up_status()
-            location_vision = Vision(mount_up_status_template, hsv_filter=mount_up_status_hsv_filter)
+        if mount_up_status_black_template is not None:
+            mount_up_status_black_hsv_filter = HsvFilter.mount_up_status_black()
+            mount_up_status_black_vision = Vision(mount_up_status_black_template,
+                                                  hsv_filter=mount_up_status_black_hsv_filter)
             t, l, w, h = self.window.getRegion().values()
+            region = {"top": t + 90, "left": l + 90, "width": 240, "height": 130}
 
-            region = {"top": t + 90, "left": l + 90, "width": 240, "height": 100}
             frame = self.window.getScreenshot(region)
-            processed = location_vision.apply_hsv_filter(frame, hsv_filter=mount_up_status_hsv_filter)
-            return location_vision.find(processed, threshold=0.75)
+            processed = mount_up_status_black_vision.apply_hsv_filter(frame, hsv_filter=mount_up_status_black_hsv_filter)
+            rectangles = mount_up_status_black_vision.find(processed, threshold=0.74)
+
+            if len(rectangles) <= 0:
+                mount_up_status_template = cv.imread(
+                    'images/mount_up_status.jpeg', cv.IMREAD_UNCHANGED)
+
+                if mount_up_status_template is not None:
+                    mount_up_status_hsv_filter = HsvFilter.mount_up_status()
+                    mount_up_status_vision = Vision(mount_up_status_template, hsv_filter=mount_up_status_hsv_filter)
+
+                    frame = self.window.getScreenshot(region)
+                    processed = mount_up_status_vision.apply_hsv_filter(frame, hsv_filter=mount_up_status_hsv_filter)
+                    return mount_up_status_vision.find(processed, threshold=0.74)
+
+            return rectangles
+
 
     def map_open_close_handler(self, open_map=False, close_map=False):
         find_counter = 0
@@ -362,114 +392,221 @@ class AutoRun:
             }
 
     def moving_handler(self):
-        if not self.pause:
-            if self.current_mouse_pt is not None and self.current_length is not None and self.current_length > round(self.current_map_scale * 3):
-                rel_mouse_pt = cmath.get_relative_point(self.screen_region, self.window.getRegion(), child_point=self.current_mouse_pt)
-                self.move_to_current_point(rel_mouse_pt)
-            elif self.current_length is not None and self.current_length <= round(self.current_map_scale * 3):
-                if len(self.rest_of_points) > 0:
-                    self.completed_points.append(self.current_point)
-                    self.current_point = self.rest_of_points.pop(0)
-                else:
-                    self.set_pause_of_moving()
+        # self.moving_mouse_control_handler()
 
-                    return True
+        self.start_moving()
 
-    def move_to_current_point(self, mouse_pt):
-        if self.pause is False and self.is_moving is False:
-            self.is_moving = True
-            self.map_open_close_handler(close_map=True)
+        self.stop_moving()
+
+        if self.current_length is not None and self.current_length <= round(self.current_map_scale * 3):
+            if len(self.rest_of_points) > 0:
+                self.completed_points.append(self.current_point)
+                self.current_point = self.rest_of_points.pop(0)
+            else:
+                self.toggle_pause_of_moving(pause=True)
+                self.stop_moving()
+
+                return True
+
+    def moving_mouse_control_handler(self):
+        class MyThread:
+            stop_thread = False
+
+            def __init__(self, func, args=()):
+                t = thr.Thread(target=func, args=(lambda: self.stop_thread, *args))
+                t.daemon = True
+                t.start()
+
+            def stop(self):
+                self.stop_thread = True
+
+        def loop(stop_thread):
+            while True:
+                pg.sleep(1 / 30)
+                if not self.pause and self.current_mouse_pt is not None:
+                    rel_mouse_pt = cmath.get_relative_point(self.screen_region, self.window.getRegion(), child_point=self.current_mouse_pt)
+                    pg.moveTo(*rel_mouse_pt)
+
+                if stop_thread():
+                    break
+
+        thread = MyThread(func=loop)
+        return thread.stop
+
+    def start_moving(self):
+        if self.pause is False and self.is_moving is False and self.current_mouse_pt is not None:
             print('Moving...', end='')
-            pg.click(*mouse_pt, button='right', duration=0.2)
-            pg.sleep(0.2)
+            self.map_open_close_handler(close_map=True)
+            pg.click(button='right', duration=0.2)
             self.map_open_close_handler(open_map=True)
             self.reset_current_position_region(is_current_point=True)
-            pg.hotkey('command', 'a')
+            pg.press('shift')
+            pg.sleep(0.1)
+            pg.keyDown('s')
+            pg.keyUp('s')
+            self.is_moving = True
             print(' +')
             return
 
-        pg.moveTo(*mouse_pt)
+    def stop_moving(self):
+        if self.pause is True and self.is_moving is True:
+            print('Stopping...', end='')
+            pg.sleep(0.2)
+            pg.move(1, 1, duration=0.2)
+            pg.move(-1, -1, duration=0.2)
+            pg.keyDown('s')
+            pg.keyUp('s')
+            self.map_open_close_handler(close_map=True)
+            pg.click(button='right', duration=0.2)
+            self.is_moving = False
+            print(' +')
+            return
 
-    def unset_pause_of_moving(self):
+    def toggle_pause_of_moving(self, pause=None):
+        if pause is not None:
+            print(pause and 'Setting pause of moving...' or 'Unsetting pause of moving...', end='')
+            self.pause = pause
+            print(' +')
+            return
+
         if self.pause is True:
             print('Unsetting pause of moving...', end='')
             self.pause = False
             print(' +')
+            return
 
-    def set_pause_of_moving(self):
         if self.pause is False:
             print('Setting pause of moving...', end='')
             self.pause = True
             print(' +')
 
-        if self.is_moving is True:
-            print('Stopping...', end='')
-            self.is_moving = False
-            pg.sleep(0.2)
-            pg.move(1, 1, duration=0.2)
-            pg.move(-1, -1, duration=0.2)
-            # pg.mouseUp(button='right', duration=0.2)
-            pg.hotkey('command', 'a')
-            print(' +')
+    def find_closest_location(self):
+        print('Finding closest location...', end='')
+        if len(self.routes) > 0:
+            for i, route in enumerate(self.routes):
+                location = route['location']
+                print(f'{location}...', end='')
 
-    def check_for_stacking_player(self, average_speed):
-        is_stack = False
-        stack_level = 0
-        if not self.pause:
-            if average_speed is not None and average_speed <= 3:
+                location_vision = self.get_location_vision(location)
+                if location_vision is not None:
+                    find_counter = 0
+                    while True:
+                        rectangles = self.find_location(location_vision)
+
+                        if len(rectangles) > 0:
+                            find_counter += 1
+                            if find_counter > 5:
+                                self.current_route = route
+                                print('+')
+                                break
+                        else:
+                            find_counter -= 1
+                            if find_counter < -5:
+                                break
+
+                if self.current_route is not None:
+                    print(f'The closest location is "{location}"')
+                    break
+
+    def find_closest_point(self):
+        if len(self.points) > 0 and self.current_position is not None:
+            closest_point = None
+            closest_length = None
+
+            for i, point in enumerate(self.points):
+                length = cmath.get_length_between_two_points(self.current_position, point)
+                if closest_length is None:
+                    closest_length = length
+                    closest_point = i
+                elif closest_length >= length:
+                    closest_length = length
+                    closest_point = i
+
+            if len(self.points) > closest_point + 1:
+                length_to_next_points = cmath.get_length_between_two_points(self.current_position, self.points[closest_point+1])
+                length_from_closest_to_next = cmath.get_length_between_two_points(self.points[closest_point], self.points[closest_point+1])
+
+                if round(length_to_next_points)-3 <= round(length_from_closest_to_next):
+                    self.closest_point = closest_point + 1
+                else:
+                    self.closest_point = closest_point
+            else:
+                self.closest_point = closest_point
+
+    def stacking_player_handler(self):
+        class MyThread:
+            stop_thread = False
+
+            def __init__(self, func, args=()):
+                t = thr.Thread(target=func, args=(lambda: self.stop_thread, *args))
+                t.daemon = True
+                t.start()
+
+            def stop(self):
+                self.stop_thread = True
+
+        def loop(stop_thread):
+            while True:
+                self.check_for_stacking_player()
+                if stop_thread():
+                    break
+            print('END THREAD LOOP')
+
+        thread = MyThread(func=loop)
+        return thread.stop
+
+    def check_for_stacking_player(self):
+        pg.sleep(1/30)
+        if not self.pause and self.is_moving:
+            if self.average_speed is not None and self.average_speed <= self.current_map_scale * 3:
                 if self.is_checking_player_stack_start_time is None:
                     self.is_checking_player_stack_start_time = time()
 
                 if self.is_checking_player_stack_start_time is not None:
                     current_time = time()
-                    if current_time - self.is_checking_player_stack_start_time > 16:
+                    if current_time - self.is_checking_player_stack_start_time > 14:
                         self.is_checking_player_stack_start_time = None
                         self.reset_time_player_stack = None
-                        # is_stack = True
+                        if self.tb is not None and self.stack_level != 7:
+                            self.tb.send_screenshot(msg=f'Player is really stacked(14 sec), resetting moving control')
 
-                        self.set_pause_of_moving()
-                        pg.sleep(1)
-                        self.unset_pause_of_moving()
+                        self.stack_level = 7
 
-                    elif current_time - self.is_checking_player_stack_start_time > 13:
+                    elif current_time - self.is_checking_player_stack_start_time > 12:
                         self.reset_time_player_stack = time()
-                        is_stack = True
-                        stack_level = 6
-                    elif current_time - self.is_checking_player_stack_start_time > 11:
+                        self.stack_level = 6
+                    elif current_time - self.is_checking_player_stack_start_time > 10:
                         self.reset_time_player_stack = time()
-                        is_stack = True
-                        stack_level = 5
-                    elif current_time - self.is_checking_player_stack_start_time > 9:
+                        self.stack_level = 5
+                    elif current_time - self.is_checking_player_stack_start_time > 8:
                         self.reset_time_player_stack = time()
-                        is_stack = True
-                        stack_level = 4
-                    elif current_time - self.is_checking_player_stack_start_time > 7:
+                        self.stack_level = 4
+                    elif current_time - self.is_checking_player_stack_start_time > 6:
+                        if self.tb is not None and self.stack_level != 3:
+                            self.tb.send_message(msg=f'Player is stacked for 6 sec :(')
                         self.reset_time_player_stack = time()
-                        is_stack = True
-                        stack_level = 3
-                    elif current_time - self.is_checking_player_stack_start_time > 5:
+                        self.stack_level = 3
+                    elif current_time - self.is_checking_player_stack_start_time > 4:
                         self.reset_time_player_stack = time()
-                        is_stack = True
-                        stack_level = 2
-                    elif current_time - self.is_checking_player_stack_start_time > 3:
+                        self.stack_level = 2
+                    elif current_time - self.is_checking_player_stack_start_time > 2:
                         self.reset_time_player_stack = time()
-                        is_stack = True
-                        stack_level = 1
+                        self.stack_level = 1
 
-            if average_speed is not None and average_speed > 3:
+            if self.average_speed is not None and self.average_speed > (self.current_map_scale * 3):
                 self.is_checking_player_stack_start_time = None
-                is_stack = False
 
             if self.reset_time_player_stack is not None:
-                is_stack = True
                 current_time = time()
                 if current_time - self.reset_time_player_stack > 1:
                     self.reset_time_player_stack = None
-        else:
+                    if self.stack_level != 7:
+                        self.stack_level = 0
+
+        elif self.stack_level != 7:
+            self.stack_level = 0
             self.is_checking_player_stack_start_time = None
             self.reset_time_player_stack = None
-
-        return is_stack, stack_level
 
     def add_mouse_pos_to_points(self):
         x, y = pg.position()
@@ -515,7 +652,7 @@ class AutoRun:
         if len(self.current_time_list) > 30:
             self.current_time_list.pop(0)
 
-        if len(self.current_time_list) > 5 and len(self.current_position_list) > 5:
+        if len(self.current_time_list) > 10 and len(self.current_position_list) > 10:
             seconds = self.current_time_list[-1] - self.current_time_list[0]
             length = cmath.get_length_between_two_points(self.current_position_list[-1], self.current_position_list[0])
 
@@ -525,13 +662,13 @@ class AutoRun:
         if speed is not None:
             self.speed_list.append(speed)
 
-        if len(self.speed_list) > 10:
+        if len(self.speed_list) > 20:
             self.speed_list.pop(0)
 
-        if len(self.speed_list) > 0:
+        if len(self.speed_list) > 10:
             average_speed = sum(self.speed_list) / len(self.speed_list)
 
-            return round(average_speed, 2)
+            return round(average_speed / self.current_map_scale, 2)
 
     def draw_line(self, pt1, pt2):
         if pt1 is not None and pt2 is not None:
@@ -612,13 +749,43 @@ class AutoRun:
         if self.output_frame is not None:
             cv.imshow("Autorun output frame", self.output_frame)
 
-    def start(self):
+    def init_keybinding(self):
+        lsn = KeysListener()
+
+        lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('x')], self.toggle_pause_of_moving)
+        lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('d')],
+                            self.reset_current_position_region, is_current_point=True)
+        lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('m')],
+                            self.set_position_region_by_mouse_pos)
+
+        listenerT = thr.Thread(target=lsn.listen)
+
+        listenerT.start()
+
+    def start(self, curr_routes: list[RouteType]):
+        self.routes = curr_routes
+
+        stack_thread_stop = self.stacking_player_handler()
+
+        moving_thread_stop = self.moving_mouse_control_handler()
+
+        self.run(self.routes)
+
+        stack_thread_stop()
+        moving_thread_stop()
+
+    def run(self, curr_routes: list[RouteType]):
         pg.sleep(0.5)
+
+        self.routes = curr_routes
 
         # print("Finding player center...", end='')
         # self.find_player_center()
         # print(' +')
         # print("player_center", self.player_center)
+        self.map_open_close_handler(open_map=True)
+        pg.sleep(0.5)
+
         self.player_center = (99, 154)
         t, l, w, h = self.window.getRegion().values()
         hp_bar_region = {'top': t + 320, 'left': l + 860, 'width': 210, 'height': 280}
@@ -629,46 +796,78 @@ class AutoRun:
         pg.PAUSE = 0
         pg.DARWIN_CATCH_UP_TIME = 0.005
 
-        self.map_open_close_handler(open_map=True)
-        pg.sleep(0.5)
-
         print("Finding map region...", end='')
         self.find_minimap_points_region()
         print(' +')
+        # print("player_center", self.player_center)
 
-        for route in self.routes:
+        if self.is_resetting:
+            self.is_resetting = False
+
+        self.find_closest_location()
+
+        # self.stacking_player_handler()
+        #
+        # self.moving_mouse_control_handler()
+
+        for i, route in enumerate(self.routes):
+            if self.current_route is not None:
+                curr_loc = self.current_route['location']
+                iter_loc = route['location']
+                if iter_loc != curr_loc:
+                    continue
+            self.current_route = None
+
+            location_start_time = time()
+
             location, from_, to, scale, points = route.values()
 
-            print(f' --- {location} : {from_} --> {to} ---')
+            print(f'\n --- {location} : {from_} --> {to} ---\n')
 
             self.points = points
             self.current_map_scale = scale
 
-            pg.sleep(1.5)
+            if i != 0:
+                pg.sleep(1.5)
             self.map_open_close_handler(open_map=True)
 
             print('Finding current location...', end='')
-            self.find_location(location)
+            self.search_location_until_found(location)
             print(' +')
 
             # TODO: closest point
-            self.rest_of_points = self.points[2:]
-            self.current_point = self.points[1]
-            self.completed_points = []
+            if self.closest_point is None:
+                print("Init current position and region...", end='')
+                self.position_region = None
+                self.init_current_position()
+                print(' +')
+                print("Init closest point...", end='')
+                self.find_closest_point()
+                if self.closest_point is None:
+                    self.closest_point = 1
+                self.rest_of_points = self.points[self.closest_point + 1:]
+                self.current_point = self.points[self.closest_point]
+                self.completed_points = self.points[:self.closest_point]
+                self.closest_point = 1
+                print(' +')
+            else:
+                self.rest_of_points = self.points[self.closest_point + 1:]
+                self.current_point = self.points[self.closest_point]
+                self.completed_points = self.points[:self.closest_point]
 
-            print("Init current position and region...", end='')
-            self.position_region = None
-            self.init_current_position()
-            print(' +')
+                print("Init current position and region...", end='')
+                self.position_region = None
+                self.init_current_position()
+                print(' +')
 
             # DEBUG LINES
             # print("Debug: Init center control gui...")
             # self.init_center_control_gui()
 
-            self.map_open_close_handler(close_map=True)
+            # self.map_open_close_handler(close_map=True)
             self.mount_up_down_handler(mount_up=True)
 
-            self.unset_pause_of_moving()
+            self.toggle_pause_of_moving()
 
             print("Start looping...", end='')
             self.last_time = time()
@@ -686,33 +885,37 @@ class AutoRun:
                 current_position = self.current_position if self.current_position is not None else self.last_position
 
                 speed = self.get_speed(current_time, current_position)
-                average_speed = self.get_average_speed(speed)
-                self.draw_average_speed(average_speed)
+                self.average_speed = self.get_average_speed(speed)
+                self.draw_average_speed(self.average_speed)
 
                 self.draw_line(current_position, self.current_point)
 
                 self.current_length = cmath.get_length_between_two_points(current_position, self.current_point)
 
-                is_player_stack, stack_level = self.check_for_stacking_player(average_speed)
+                if self.stack_level == 7:
+                    self.toggle_pause_of_moving(pause=True)
 
-                extra_angle = stack_level == 1 and 50 or \
-                              stack_level == 2 and -50 or \
-                              stack_level == 3 and 85 or \
-                              stack_level == 4 and -85 or \
-                              stack_level == 5 and 130 or \
-                              stack_level == 6 and -130 or 0
+                extra_angle = self.stack_level == 1 and 50 or \
+                              self.stack_level == 2 and -50 or \
+                              self.stack_level == 3 and 85 or \
+                              self.stack_level == 4 and -85 or \
+                              self.stack_level == 5 and 130 or \
+                              self.stack_level == 6 and -130 or 0
                 angle = cmath.get_angle_between_two_points(self.current_point, current_position)
 
                 self.current_mouse_pt = cmath.get_second_point_in_direction(
                     self.player_center,
                     26,
-                    is_player_stack and angle + extra_angle or angle
+                    self.stack_level != 0 and angle + extra_angle or angle
                 ) if angle else None
 
                 is_finished_current_points = self.moving_handler()
                 if is_finished_current_points:
                     break
 
+                if self.stack_level == 7:
+                    self.is_resetting = True
+                    break
                 self.draw_line(self.player_center, self.current_mouse_pt)
 
                 # DEBUG LINES
@@ -729,6 +932,51 @@ class AutoRun:
                 if key == 27:
                     sys.exit()
 
+            self.current_position_list = []
+            self.current_time_list = []
+            self.speed_list = []
+
+            location_time = time() - location_start_time
+            min = math.floor(location_time / 60)
+            sec = math.floor(location_time % 60)
+            print(f'\n Time at {location}: {min}:{sec} \n')
+            self.route_times.append(location_time)
+
+            if self.stack_level == 7 and self.is_resetting:
+                self.stack_level = 0
+                self.current_position = None
+                self.current_mouse_pt = None
+                self.points = []
+                self.current_point = None
+                self.average_speed = None
+                self.completed_points = []
+                self.rest_of_points = []
+                self.pause = True
+                self.is_moving = False
+                self.is_checking_player_stack_start_time = None
+                self.reset_time_player_stack = None
+                self.current_map_scale = 1
+                self.current_length = None
+                self.last_position = None
+                self.last_time = None
+                self.speed_list = []
+                self.current_position_list = []
+                self.current_time_list = []
+                self.position_region = None
+                self.points_region = None
+                self.closest_point = None
+                break
+
+        if self.is_resetting:
+            self.run(self.routes)
+
+        self.map_open_close_handler(close_map=True)
+
+        if len(self.route_times) > 0:
+            min = round(sum(self.route_times) / 60)
+            sec = round(sum(self.route_times) % 60)
+            print(f'\n General time spent: -- {min}:{sec} -- \n')
+
         # if not building_mode:
             # stop_watching()
             # DEBUG LINES
@@ -738,19 +986,19 @@ class AutoRun:
 
 if __name__ == '__main__':
     # TODO:
-    #  1. Add scale of map to routes
-    #  2. Find closest point on map for staring from it
-    #  3. Find location from all in routes and starting from it#
+    #  1. Only change the current point when length is less 4, and stop moving only if length to last point is less 4#
 
     routes_service = RoutesService()
 
     current_routes_list = [
-        *complete_routes.bridgewatch__martlock,
-        # *complete_routes.bridgewatch__hornbeam_wood__treeheart_mission,
-        # *complete_routes.hornbeam_wood__bridgewatch__treeheart_mission,
-
-
-        # routes.lazygrass_plain__snapshaft_trough__bridgewatch
+        *complete_routes.lymhurst__bridgewatch,
+        # routes.lazygrass_plain__bridgewatch__snapshaft_trough__r,
+        # routes.snapshaft_trough__lazygrass_plain__longshadow_plain__r,
+        # routes.snapshaft_trough__longshadow_plain__lazygrass_plain,
+        # routes.lazygrass_plain__snapshaft_trough__bridgewatch,
+        # city_routes.bridgewatch__lazygrass_plain__yara_sunblaze_heart_mission,
+        # city_routes.bridgewatch__yara_sunblaze_heart_mission__bank_of_bridgewatch,
+        # city_routes.bank_of_bridgewatch__bridgewatch__bank_chest,
     ]
 
     print("Finding window...", end='')
@@ -758,36 +1006,19 @@ if __name__ == '__main__':
     # albion_window.init_region('Albion Online Client')
     print(' +')
     stop_watching = albion_window.startWatchdogOnActive()
+    tb = TelegramBot(default_region={'top': 25, 'left': 0, 'width': 2925, 'height': 1110})
+    autorun = AutoRun(window=albion_window, tb=tb)
 
-    autorun = AutoRun(window=albion_window, routes=current_routes_list)
+    autorun.init_keybinding()
 
-    lsn = KeysListener()
-
-    lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('z')], autorun.set_pause_of_moving)
-    lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('x')], autorun.unset_pause_of_moving)
-    lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('d')], autorun.reset_current_position_region, is_current_point=True)
-    lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('m')], autorun.set_position_region_by_mouse_pos)
-
-    lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('a')], autorun.add_mouse_pos_to_points)
-    lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('c')], autorun.add_curr_pos_to_points)
-    lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('r')], autorun.remove_last_point_in_building_mode)
-    lsn.add_combination([lsn.Key.cmd, lsn.Key.shift, lsn.KeyCode.from_char('s')], autorun.save_points_to_route)
-
-    print('Creating thread...', end='')
-    listenerT = thr.Thread(target=lsn.listen)
-    print(' +')
-
-    print('Starting thread...', end='')
-    listenerT.start()
-    # moving_handlerT.start()
-    print(' +')
-
-    autorun.start()
+    autorun.start(curr_routes=current_routes_list)
 
     print('Points: ', autorun.points)
 
     if stop_watching is not None:
         stop_watching()
+
+    tb.stop_polling()
     pg.press('esc')
     cv.destroyAllWindows()
 

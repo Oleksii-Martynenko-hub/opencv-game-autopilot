@@ -34,3 +34,7 @@ class HsvFilter:
     @classmethod
     def mount_up_status(cls):
         return cls(hMin=19, sMin=75, vMin=59, hMax=109, sMax=255, vMax=250, sAdd=76, sSub=0, vAdd=21, vSub=0)
+
+    @classmethod
+    def mount_up_status_black(cls):
+        return cls(hMin=5, sMin=12, vMin=25, hMax=120, sMax=240, vMax=90, sAdd=75, sSub=0, vAdd=23, vSub=0)
