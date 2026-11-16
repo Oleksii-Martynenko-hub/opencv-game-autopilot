@@ -4,6 +4,7 @@ import pyautogui as pg
 from filters.hsvfilter import HsvFilter
 from vision import Vision
 from window_capture import WindowCapture
+from autorun import AutoRun
 from custom_math import CustomMath as cmath
 
 
@@ -12,7 +13,8 @@ class TradeHeartsUIController:
     screenH = pg.size()[1]
     screen_region = dict(top=0, left=0, width=screenW, height=screenH)
 
-    def __init__(self, window: WindowCapture, city="bridgewatch"):
+    def __init__(self, window: WindowCapture, autorun: AutoRun, city="bridgewatch"):
+        self.autorun = autorun
         self.window = window
         self.city = city
         self.default_hsv_filter = HsvFilter(hMin=0, sMin=0, vMin=0, hMax=179, sMax=255, vMax=255, sAdd=0, sSub=0, vAdd=0, vSub=0)
@@ -76,7 +78,7 @@ class TradeHeartsUIController:
                         if amount_tries is not None and amount_tries <= 0:
                             break
 
-    def open_trade_mission_window(self):
+    def open_trade_mission_window(self, reset_autorun_route):
         def click_at_vendor(is_first):
             if is_first:
                 print("Opening trade mission window...")
@@ -91,9 +93,16 @@ class TradeHeartsUIController:
             'images/trade_mission_tab.jpeg',
             click_at_vendor,
             find_region,
+            tries=5,
         )
 
-        pg.moveTo(*self.get_screen_point(points[0], find_region), duration=0.15)
+        if points is not None and len(points) > 0:
+
+            pg.moveTo(*self.get_screen_point(points[0], find_region), duration=0.15)
+        else:
+            self.autorun.closest_point = None
+            self.autorun.start(curr_routes=reset_autorun_route)
+            self.open_trade_mission_window(reset_autorun_route=reset_autorun_route)
 
     def check_is_player_flagged(self):
         def click_at_flag_btn(is_first):
@@ -111,6 +120,7 @@ class TradeHeartsUIController:
             click_at_flag_btn,
             find_region,
             tries=10,
+            threshold=0.9
         )
 
         if points is not None and len(points) > 0:
@@ -200,7 +210,10 @@ class TradeHeartsUIController:
 
         pg.moveTo(*self.get_screen_point(points[0], find_region), duration=0.15)
 
-    def open_major_mission_dialog(self):
+    def open_major_mission_dialog(self, point=None, reset_autorun_route=None):
+        if point is not None:
+            pg.moveTo(*self.get_screen_point(point, {'top': 0, 'left': 0, 'width': 1920, 'height': 1080}), duration=0.15)
+
         def click_at_major_mission(is_first):
             if is_first:
                 print("Opening major mission dialog...")
@@ -215,9 +228,17 @@ class TradeHeartsUIController:
             'images/major_contract_treeheart_dialog.jpeg',
             click_at_major_mission,
             find_region,
+            tries=10
         )
 
-        pg.moveTo(*self.get_screen_point(points[0], find_region), duration=0.15)
+        if points is not None and len(points) > 0:
+
+            pg.moveTo(*self.get_screen_point(points[0], find_region), duration=0.15)
+        else:
+            if reset_autorun_route is not None:
+                self.autorun.closest_point = None
+                self.autorun.start(curr_routes=reset_autorun_route)
+                self.open_major_mission_dialog(point=point, reset_autorun_route=reset_autorun_route)
 
     def click_contract_accept_btn(self):
         def click_at_accept_btn(is_first):
@@ -327,7 +348,7 @@ class TradeHeartsUIController:
             should_find=False
         )
 
-    def open_bank(self):
+    def open_bank(self, reset_autorun_route):
         def click_at_chest(is_first):
             if is_first:
                 print("Opening bank chest...")
@@ -342,9 +363,17 @@ class TradeHeartsUIController:
             'images/bank_icon.jpeg',
             click_at_chest,
             find_region,
+            tries=10
+
         )
 
-        pg.moveTo(*self.get_screen_point(points[0], find_region), duration=0.15)
+        if points is not None and len(points) > 0:
+
+            pg.moveTo(*self.get_screen_point(points[0], find_region), duration=0.15)
+        else:
+            self.autorun.closest_point = None
+            self.autorun.start(curr_routes=reset_autorun_route)
+            self.open_bank(reset_autorun_route=reset_autorun_route)
 
     def open_inventory(self):
         print("Opening inventory...")
@@ -417,6 +446,8 @@ class TradeHeartsUIController:
 
         def click_with_shift_at_heart(is_first):
             print("Can't take hearts to inventory")
+            pg.click(*self.get_screen_point((540, 905), {'top': 0, 'left': 0, 'width': 1920, 'height': 1080}), duration=0.25)
+            pg.sleep(0.15)
 
         find_region = {'top': 250, 'left': 36, 'width': 550, 'height': 630}
 

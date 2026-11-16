@@ -120,7 +120,12 @@ class AutoRun:
                     if find_counter > 5:
                         break
                 else:
-                    find_counter = 0
+                    find_counter -= 1
+                    if find_counter < -50:
+                        find_counter = 0
+                        self.stack_level = 7
+                        print('Can`t find current location!')
+                        break
 
     def find_opened_map(self):
         t, l, w, h = self.window.getRegion().values()
@@ -440,8 +445,8 @@ class AutoRun:
             pg.click(button='right', duration=0.2)
             self.map_open_close_handler(open_map=True)
             self.reset_current_position_region(is_current_point=True)
-            pg.press('shift')
-            pg.sleep(0.1)
+            pg.keyUp('shift')
+            pg.sleep(0.2)
             pg.keyDown('s')
             pg.keyUp('s')
             self.is_moving = True
@@ -522,7 +527,11 @@ class AutoRun:
                     closest_length = length
                     closest_point = i
 
-            if len(self.points) > closest_point + 1:
+            if len(self.points) >= 2 and len(self.points) - 1 == closest_point:
+                self.closest_point = closest_point - 1
+                print('Closest point prelast', closest_point)
+            elif len(self.points) > closest_point + 1:
+                print('Closest point next point', closest_point)
                 length_to_next_points = cmath.get_length_between_two_points(self.current_position, self.points[closest_point+1])
                 length_from_closest_to_next = cmath.get_length_between_two_points(self.points[closest_point], self.points[closest_point+1])
 
@@ -531,6 +540,7 @@ class AutoRun:
                 else:
                     self.closest_point = closest_point
             else:
+                print('Closest point closest', closest_point)
                 self.closest_point = closest_point
 
     def stacking_player_handler(self):
@@ -893,6 +903,7 @@ class AutoRun:
                 self.current_length = cmath.get_length_between_two_points(current_position, self.current_point)
 
                 if self.stack_level == 7:
+                    print('\n RESETTING AUTORUN... \n')
                     self.toggle_pause_of_moving(pause=True)
 
                 extra_angle = self.stack_level == 1 and 50 or \
@@ -991,7 +1002,7 @@ if __name__ == '__main__':
     routes_service = RoutesService()
 
     current_routes_list = [
-        *complete_routes.lymhurst__bridgewatch,
+        *complete_routes.martlock__fort_sterling,
         # routes.lazygrass_plain__bridgewatch__snapshaft_trough__r,
         # routes.snapshaft_trough__lazygrass_plain__longshadow_plain__r,
         # routes.snapshaft_trough__longshadow_plain__lazygrass_plain,

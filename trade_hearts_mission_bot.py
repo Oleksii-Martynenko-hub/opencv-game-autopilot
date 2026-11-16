@@ -9,7 +9,6 @@ from trade_hearts_ui_controller import TradeHeartsUIController
 from window_capture import WindowCapture
 
 if __name__ == '__main__':
-    pg.countdown(3)
 
     print("Finding window...", end='')
     albion_window = WindowCapture()
@@ -17,17 +16,22 @@ if __name__ == '__main__':
     print(' +')
 
     routes_service = RoutesService()
-    ui = TradeHeartsUIController(albion_window)
     tb = TelegramBot(default_region={'top': 25, 'left': 0, 'width': 2925, 'height': 1110})
     autorun = AutoRun(window=albion_window, tb=tb)
+    ui = TradeHeartsUIController(albion_window, autorun)
 
     autorun.init_keybinding()
 
-    repeat = 11
+    repeat = 37
 
     for i in range(repeat):
+        yara__bank = [
+            city_routes.bridgewatch__yara_sunblaze_heart_mission__bank_of_bridgewatch,
+            city_routes.bank_of_bridgewatch__bridgewatch__bank_chest,
+        ]
         # put award hearts and take another hearts
-        ui.open_bank()
+        # if i != 0:
+        ui.open_bank(reset_autorun_route=yara__bank)
         tb.send_message(msg=f'Trade mission {i+1} is starting...')
         ui.open_inventory()
         ui.put_hearts_to_bank()
@@ -43,7 +47,7 @@ if __name__ == '__main__':
 
         # take mission
         tb.send_screenshot()
-        ui.open_trade_mission_window()
+        ui.open_trade_mission_window(reset_autorun_route=bank__yara)
         ui.open_trade_mission_tab()
         ui.open_lymhurst_mission()
         ui.open_major_mission_dialog()
@@ -57,10 +61,10 @@ if __name__ == '__main__':
         autorun.start(curr_routes=yara__shady)
 
         # give items to shady
-        pg.moveTo(*ui.get_screen_point((950, 675), {'top': 0, 'left': 0, 'width': 1920, 'height': 1080}), duration=0.15)
         tb.send_screenshot()
 
-        ui.open_major_mission_dialog()
+        ui.open_major_mission_dialog(point=(950, 675), reset_autorun_route=yara__shady)
+        pg.sleep(2)
         ui.click_contract_give_items_btn()
         ui.close_trade_mission_window()
 
@@ -74,7 +78,7 @@ if __name__ == '__main__':
         # finish mission and give items to yara
         tb.send_screenshot()
 
-        ui.open_major_mission_dialog()
+        ui.open_major_mission_dialog(reset_autorun_route=shady__yara)
         ui.click_contract_give_items_btn()
         ui.close_trade_mission_window()
 
